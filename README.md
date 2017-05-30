@@ -1,1 +1,1 @@
-# two_dimensional_XY_model
+# two-dimensional XY model
