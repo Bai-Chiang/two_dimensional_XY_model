@@ -14,7 +14,7 @@
  * so each core will generate different random number series 
  */
 __global__ void init_rand(unsigned int seed, curandState_t* states) {
-    int index = threadIdx.x + blockIdx.x * blockDim.x;
+    int index = blockIdx.x *blockDim.x + threadIdx.x;
     curand_init(
             seed, // seed value is same for each core
             index, // sequence number for each core is it's index
@@ -23,13 +23,12 @@ __global__ void init_rand(unsigned int seed, curandState_t* states) {
             );
 }
 
-__global__ void initialize (float* spins, int* length, curandState_t* states) {
-    int index = threadIdx.x + blockIdx.x * blockDim.x;
-    //spins[index] = curand_uniform() * 2 * M_PI;
-    //spins[index] = float(M_PI);
-    for (int i = 0; i < 10000; ++i) {
-        spins[index] = curand_uniform(&states[index]) * 2*M_PI;
-    }
+/* ------------------------------------------------------------------------------------------------
+ * initialize the spins with random direction from [0, 2*pi]
+ */
+__global__ void initialize (float* d_spins, curandState_t* states) {
+    int index = blockIdx.x *blockDim.x + threadIdx.x;
+    d_spins[index] = curand_uniform(&states[index]) * 2*M_PI;
 }
 
 void print_spins (float* spins, int length, int print_dim1, int print_dim2) {
@@ -48,19 +47,18 @@ void print_spins (float* spins, int length, int print_dim1, int print_dim2) {
 // ================================================================================================
 
 int main() {
-    long long n_sample = 100;
+    long long n_sample = 10;
     long long warm_up_steps = 100;
-    int length = 200;
+    int length = 512; // 2^n, n >= 5 
     unsigned int seed = 0;
-
-    int n_block = length;
-    int n_threads_per_block = length;
-    size_t size = length * length;
+    long long size = length * length;
+    int threads_per_block = 1024;
+    int blocks = size/threads_per_block;
 
     // --------------------------------------------------------------------------------------------
     curandState_t* states; // used to store random state for each core
     cudaMalloc((void**) &states, size * sizeof(curandState_t)); // allocate memory in device
-    init_rand<<<n_block, n_threads_per_block>>>(seed, states); // initialize for all states
+    init_rand<<<blocks, threads_per_block>>>(seed, states); // initialize for all states
     
     //std::cout << "init_rand completed" << std::endl;
     
@@ -71,39 +69,27 @@ int main() {
     cudaMalloc((void**)&d_length, sizeof(int));
     cudaMemcpy(d_length, &length, sizeof(int), cudaMemcpyHostToDevice);
 
-    /* -----------------------------------------------------------------
-     * get samples and initialize them
-     */
+    float* p_spins = new float[size];
+    cudaDeviceSynchronize();
 
-    float** pp_spins = new float* [n_sample];
+    
     for (long long i = 0; i < n_sample; ++i) {
-        pp_spins[i] = new float [size];
-    }
+       // initialize spins
+        initialize<<<blocks, threads_per_block>>>(d_spins, states);
 
-    for (long long i = 0; i < n_sample; ++i) {
-        // copy memory from host to device
-        cudaMemcpy(d_spins, pp_spins[i], size * sizeof(float), cudaMemcpyHostToDevice);
-
-        initialize<<<n_block, n_threads_per_block>>>(d_spins, d_length, states);
-
-        //copy memory from device to host
-        cudaMemcpy(pp_spins[i], d_spins, size * sizeof(float), cudaMemcpyDeviceToHost);
+        // copy memory from device to host
+        cudaMemcpy(p_spins, d_spins, size * sizeof(float), cudaMemcpyDeviceToHost);
         
-    }
+        std::cout << i << std::endl;
+        cudaDeviceSynchronize();
 
-    /*
-    // -------------------------------------
-    for (long long i = 0; i < n_sample; ++i) {
-        print_spins(pp_spins[i], length, 5, 10);
     }
-    */
+    
+    print_spins (p_spins, length, 10, 15);
 
     // -----------------------------------------------------------------
     cudaFree(&d_length); cudaFree(d_spins);
     cudaFree(states); 
-    // free pp_spins
-    for (long long i = 0; i < n_sample; ++i) {
-        delete[] pp_spins[i];
-    }
-    delete[] pp_spins;
+    delete[] p_spins;
+    return 0;
 }
