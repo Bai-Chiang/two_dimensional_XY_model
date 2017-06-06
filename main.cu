@@ -42,18 +42,40 @@ void initialize (float* spins, curandState_t* states) {
  */
 __global__ 
 void warm_up (float* spins, int* p_length, long long* n_itter) {
-    int dim1 = 9;
-    int dim2 = 9;
-    float upper_spin = 0;
+    int dim1 = 0;
+    int dim2 = 0;
     int length = *p_length;
-    
+    float upper_spin = 0, lower_spin = 0, left_spin = 0, right_spin = 0;
+
     // get upper spin
     if (dim1 == 0) {
         upper_spin = spins[(length-1) * length + dim2];
     } else {
         upper_spin = spins[(dim1-1) * length + dim2];
     }
-    spins[0] = upper_spin;
+
+    // get lower spin
+    if (dim1 == length-1) {
+        lower_spin = spins[0 * length + dim2];
+    } else {
+        lower_spin = spins[(dim1+1) * length + dim2];
+    }
+
+    // get left spin
+    if (dim2 == 0) {
+        left_spin = spins[dim1 * length + (length-1)];
+    } else {
+        left_spin = spins[dim1 * length + (dim2-1)];
+    }
+
+    // get right spin
+    if (dim2 == length-1) {
+        right_spin = spins[dim1 * length + 0];
+    } else {
+        right_spin = spins[dim1 * length + (dim2+1)];
+    }
+
+    spins[0] = right_spin;
 }
     
     
