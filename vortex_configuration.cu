@@ -1,7 +1,7 @@
 // --- file: vortex_configuration.cu ---
 // this file calculate a 2D XY-model with CUDA
 // get one 2D-spin lattice result in specific temperature
-// output spin direction:theta in directory result/
+// output spin direction:theta in directory result/vortex_configuration/
 
 
 
@@ -22,8 +22,8 @@ int main() {
     // some values can be adjusted
     int length = 128; // 2^n, n >= 5    length of 2D-spins, the 2D-spins lattice will be length * length
     unsigned int seed = 0; // seed of random numbers    set seed to a fix number, so that each time you run will get same result
-    long long warm_up_steps = length * length * 64; // length * length * 2^n    warm up step is proportional to total number of spins
-    float T = 0.5; // temperature, suppose boltzmann constant k = 1 
+    long long warm_up_steps = length * length * 65536; // length * length * 2^n    warm up step is proportional to total number of spins
+    float T = 0.001; // temperature, suppose boltzmann constant k = 1 
 
 
 
@@ -74,7 +74,7 @@ int main() {
     std::string str_L = std::to_string(length);
     std::string str_T = std::to_string(T);
     std::string str_n_warm = std::to_string(warm_up_steps);
-    std::string file_name = std::string("result/quiver_plot_") + str_L + std::string("_") + str_T + "_" + str_n_warm + std::string(".data");
+    std::string file_name = std::string("result/vortex_configuration/") + str_L + std::string("_") + str_T + "_" + str_n_warm + std::string(".data");
     
     FILE* pfile;
     pfile = fopen(file_name.c_str(), "w");
