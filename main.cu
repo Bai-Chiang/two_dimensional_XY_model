@@ -30,14 +30,15 @@ void print_spins (float* spins, int length, int print_dim1, int print_dim2) {
 
 int main() {
     //clock_t begin = std::clock();
+    //cudaProfilerStop();
 
-    long long n_sample = std::pow(2,0);
-    int length = 128; // 2^n, n >= 5
+    long long n_sample = std::pow(2,19);
+    int length = 1024; // 2^n, n >= 5
     unsigned int seed = 0;
     long long size = length * length;
     int threads_per_block = std::min(1024LL, size);
     int blocks = size/threads_per_block;
-    long long warm_up_steps = size * 32LL;
+    long long warm_up_steps = size * 32;
     long long n_itter = warm_up_steps/size;
     //long long n_itter = 1;
     float T = 0.5;
