@@ -29,7 +29,6 @@ __global__ void init_rand(unsigned int seed, curandState_t* states) {
 __global__ void initialize (float* spins, curandState_t* states) {
     int index = blockIdx.x *blockDim.x + threadIdx.x;
     spins[index] = curand_uniform(&states[index]) * 2*M_PI;
-    //spins[index] = index;
 }
 
 
@@ -97,9 +96,69 @@ __global__ void warm_up (float* spins, float* p_T, int* p_length, long long* p_n
 
         // decide whether change spin
         delta_energy = changed_energy - current_energy;
-        if ( curand_uniform(&states[index]) < std::exp(-delta_energy/T) ) {
+        if (delta_energy <= 0) {
+            spins[dim1 * length + dim2] = new_spin;
+        } else if ( curand_uniform(&states[index]) < std::exp(-delta_energy/T) ) {
             spins[dim1 * length + dim2] = new_spin;
         }
 
     }
 }
+
+
+
+/* ------------------------------------------------------------------------------------------------
+ * get x and y component of spins
+ */
+__global__ void get_spin(float* Sx, float* Sy, float* theta) {
+    long long global_id = blockIdx.x *blockDim.x + threadIdx.x;
+    Sx[global_id] = std::cos(theta[global_id]);
+    Sy[global_id] = std::sin(theta[global_id]);
+}
+
+
+/* ------------------------------------------------------------------------------------------------
+ * get system energy for each spin
+ */
+__global__ void get_energy (float* energy, float* spins, int* p_length) {
+    int length = *p_length;
+    long long global_id = blockIdx.x * blockDim.x + threadIdx.x;
+    float current_spin, upper_spin, lower_spin, left_spin, right_spin;
+    
+    // get current position spin
+    current_spin = spins[blockIdx.x * length + threadIdx.x];
+
+    // get upper spin
+    if (blockIdx.x == 0) {
+        upper_spin = spins[(length-1) * length + threadIdx.x];
+    } else {
+        upper_spin = spins[(blockIdx.x-1) * length + threadIdx.x];
+    }
+
+    // get lower spin
+    if (blockIdx.x == length) {
+        lower_spin = spins[0 * length + threadIdx.x];
+    } else {
+        lower_spin = spins[(blockIdx.x+1) * length + threadIdx.x];
+    }
+
+    // get left spin
+    if (threadIdx.x != 0) {
+        left_spin = spins[blockIdx.x * length + (threadIdx.x-1)];
+    } else {
+        left_spin = spins[blockIdx.x * length + (length-1)];
+    }
+
+    // get right spin
+    if (threadIdx.x != length-1) {
+        right_spin = spins[blockIdx.x * length + (threadIdx.x+1)];
+    } else {
+        right_spin = spins[blockIdx.x * length + 0];
+    }
+
+    // get energy
+    energy[global_id] = -(std::cos(current_spin - upper_spin) + std::cos(current_spin - lower_spin)
+                          + std::cos(current_spin - left_spin) + std::cos(current_spin - right_spin));
+}
+
+

@@ -22,9 +22,8 @@ int main() {
     // some values can be adjusted
     int length = 128; // 2^n, n >= 5    length of 2D-spins, the 2D-spins lattice will be length * length
     unsigned int seed = 0; // seed of random numbers    set seed to a fix number, so that each time you run will get same result
-    long long warm_up_steps = length * length * 65536; // length * length * 2^n    warm up step is proportional to total number of spins
-    float T = 0.5; // temperature, suppose boltzmann constant k = 1 
-
+    long long warm_up_steps = (long long)(length * length) * 131072; // length * length * 2^n    warm up step is proportional to total number of spins
+    float T = 0.01; // temperature, suppose boltzmann constant k = 1 
 
 
     // ============================================================================================
