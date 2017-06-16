@@ -42,10 +42,10 @@ int main() {
 
     // some values can be adjusted
     int length = 512; // 2^n, n >= 5    length of 2D-spins, the 2D-spins lattice will be length * length
-    long long warm_up_steps = (long long)(length * length) * 128; // length * length * 2^n    warm up step is proportional to total number of spins
+    long long warm_up_steps = (long long)(length * length) * 8; // length * length * 2^n    warm up step is proportional to total number of spins
     float T_min = 0.0, T_max = 2.0; // temperature range: (T_min, T_max]  suppose boltzmann constant k = 1
     int n_T = 200; // number of temperature interpolate pints, T_min < T <= T_max. If n_T = 100, T_min = 0.0, T_max = 2.0, then T = 0.02, 0.04, ..., 1.98, 2.00
-    long long n_sample = 16384LL; // plot one figure of 2D-spins, hence n_sample = 1
+    long long n_sample = 100000LL;
 
 
     // ============================================================================================
@@ -55,7 +55,7 @@ int main() {
     // host part
     unsigned int seed = time(NULL); // seed of random numbers
     long long size = length * length; // the total size of 2D-spin lattice is length * length
-    int threads_per_block = std::min(1024LL, size);
+    int threads_per_block = std::min(1024, length);
     int blocks = size/threads_per_block;
     long long n_itter = warm_up_steps/size; // sice total number of threads is size (threads_per_block * blocks), to obtain warm_up_steps, need to itterate warm_up_steps/size times
     float T;
@@ -72,8 +72,8 @@ int main() {
     float Sy[1024];
     float E[1024];
     long long index;
-float* debug_spin = new float[size];
-float* debug_Sx = new float[size];
+//float* debug_spin = new float[size];
+//float* debug_Sx = new float[size];
 
     // ------------------------------------------
     // device part
@@ -123,7 +123,14 @@ float* debug_Sx = new float[size];
             //std::cout << "i sample: " << i_sample << "    T: " << T << std::endl;
 
             // warm up
-            warm_up <<<blocks, threads_per_block>>> (d_spins, d_T, d_length, d_n_itter, states);
+            //warm_up <<<blocks, threads_per_block>>> (d_spins, d_T, d_length, d_n_itter, states);
+            
+            for (long long i = 0; i < n_itter; ++i) {
+                // only needs half of length, so at this time # of threads in a block is half of previous
+                warm_up_type_1<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states); 
+                warm_up_type_2<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states);
+            }
+            
 
             // get spin
             cudaMalloc((void**)&d_Sx, size*sizeof(float));
@@ -198,7 +205,7 @@ float* debug_Sx = new float[size];
     double* M_mean_square = new double[n_T];
     double* M_mean = new double[n_T];
     double* E_mean = new double[n_T];
-    double* E_mean_square = new double[n_T];
+    //double* E_mean_square = new double[n_T];
 
     double f_sample = double(n_sample);
     double T_double;
@@ -207,7 +214,7 @@ float* debug_Sx = new float[size];
         M_mean[i_T] = 0.0;
         M_mean_square[i_T] = 0.0;
         E_mean[i_T] = 0.0;
-        E_mean_square[i_T] = 0.0;
+        //E_mean_square[i_T] = 0.0;
         Mx_vs_T[i_T] = 0.0;
         My_vs_T[i_T] = 0.0;
         susceptibility_vs_T[i_T] = 0.0;
@@ -218,14 +225,25 @@ float* debug_Sx = new float[size];
             M_mean[i_T] += std::sqrt(Mx_sample[index]*Mx_sample[index] + My_sample[index]*My_sample[index]) / f_sample;
             M_mean_square[i_T] += (Mx_sample[index] * Mx_sample[index] + My_sample[index] * My_sample[index])/f_sample;
             E_mean[i_T] += E_sample[index]/f_sample;
-            E_mean_square[i_T] += E_sample[index] * E_sample[index] / f_sample;
+            //E_mean_square[i_T] += E_sample[index] * E_sample[index]/f_sample;
             Mx_vs_T[i_T] += Mx_sample[index]/f_sample;
             My_vs_T[i_T] += My_sample[index]/f_sample;
         }
         T_double = double( T_min + double(i_T+1) * (T_max - T_min)/double(n_T) );
         susceptibility_vs_T[i_T] = (M_mean_square[i_T] - M_mean[i_T]*M_mean[i_T])/T_double;
-        specific_heat_per_spin_vs_T[i_T] = (E_mean_square[i_T]/double(size) - E_mean[i_T]*E_mean[i_T]/double(size))/(T_double*T_double);
+        //specific_heat_per_spin_vs_T[i_T] = (E_mean_square[i_T]/double(size) - E_mean[i_T]*E_mean[i_T]/double(size))/(T_double*T_double);
         E_per_spin_vs_T[i_T] = E_mean[i_T]/double(size);
+    }
+
+    // get specific heat: Cv_i = (E_{i+1} - E_{i-1})/(T_{i+1} - T_{i-1})
+    for (int i_T = 0; i_T < n_T; ++i_T) {
+        if(i_T == 0) {
+            specific_heat_per_spin_vs_T[i_T] = (E_per_spin_vs_T[i_T+1]-E_per_spin_vs_T[i_T]) / (double(T_max - T_min)/double(n_T));
+        } else if (i_T == n_T-1) {
+            specific_heat_per_spin_vs_T[i_T] = (E_per_spin_vs_T[i_T]-E_per_spin_vs_T[i_T-1]) / (double(T_max - T_min)/double(n_T));
+        } else {
+            specific_heat_per_spin_vs_T[i_T] = (E_per_spin_vs_T[i_T+1]-E_per_spin_vs_T[i_T-1]) / (double(T_max - T_min)*2.0/double(n_T));
+        }
     }
 
     std::cout << std::endl;
@@ -241,11 +259,8 @@ float* debug_Sx = new float[size];
     print(My_vs_T, n_T);
     std::cout<< std::endl;
     std::cout << "E:\n";
-    print(E_per_spin_vs_T, n_T);
+    print(E_mean, n_T);
     std::cout<< std::endl;
-    std::cout << "E^2:\n";
-    print(E_mean_square, n_T);
-    std::cout << std::endl;
     std::cout << "Chi:\n";
     print(susceptibility_vs_T,n_T);
     std::cout << std::endl;

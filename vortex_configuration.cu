@@ -21,18 +21,19 @@ int main() {
 
     // some values can be adjusted
     int length = 128; // 2^n, n >= 5    length of 2D-spins, the 2D-spins lattice will be length * length
-    unsigned int seed = 0; // seed of random numbers    set seed to a fix number, so that each time you run will get same result
-    long long warm_up_steps = (long long)(length * length) * 131072; // length * length * 2^n    warm up step is proportional to total number of spins
+    long long warm_up_steps = (long long)(length * length) * 32768; // length * length * 2^n    warm up step is proportional to total number of spins
     float T = 0.01; // temperature, suppose boltzmann constant k = 1 
 
 
     // ============================================================================================
+    unsigned int seed = time(NULL); // seed of random numbers
     long long n_sample = 1; // plot one figure of 2D-spins, hence n_sample = 1
     long long size = length * length; // the total size of 2D-spin lattice is length * length
-    int threads_per_block = std::min(1024LL, size);
+    int threads_per_block = std::min(1024, length);
     int blocks = size/threads_per_block;
     long long n_itter = warm_up_steps/size; // sice total number of threads is size (threads_per_block * blocks), to obtain warm_up_steps, need to itterate warm_up_steps/size times
-    
+    //std::cout << "threads: " << threads_per_block << "     blocks: " << blocks << std::endl;
+    //std::cout << "5%2: " << 5%2 << std::endl; 
     // --------------------------------------------------------------------------------------------
     curandState_t* states; // used to store random state for each core
     cudaMalloc((void**) &states, size * sizeof(curandState_t)); // allocate memory in device
@@ -52,7 +53,7 @@ int main() {
     cudaMemcpy(d_n_itter, &n_itter, sizeof(long long), cudaMemcpyHostToDevice);
     cudaMemcpy(d_T, &T, sizeof(float), cudaMemcpyHostToDevice);
 
-    float* p_spins = new float[size];
+    float* spins = new float[size];
 
     for (long long i = 0; i < n_sample; ++i) {
 
@@ -60,12 +61,17 @@ int main() {
         initialize <<<blocks, threads_per_block>>> (d_spins, states);
 
         // warm up
-        warm_up <<<blocks, threads_per_block>>> (d_spins, d_T, d_length, d_n_itter, states);
+        //warm_up <<<blocks, threads_per_block>>> (d_spins, d_T, d_length, d_n_itter, states);
+        for (long long i = 0; i < n_itter; ++i) {
+            // only needs half of length, so at this time # of threads in a block is half of previous
+            warm_up_type_1<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states); 
+            warm_up_type_2<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states);
+        }
 
     }
 
     // copy memory from device to host
-    cudaMemcpy(p_spins, d_spins, size * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(spins, d_spins, size * sizeof(float), cudaMemcpyDeviceToHost);
 
     // --------------------------------------------------------------------------------------------
     // write file
@@ -81,7 +87,7 @@ int main() {
         fprintf(pfile, "%d\n%f\n%lld\n", length, T, warm_up_steps);
         for (int i = 0; i < length; ++i) {
             for (int j = 0; j < length; ++j) {
-                fprintf(pfile, "%f,", p_spins[i*length + j]);
+                fprintf(pfile, "%f,", spins[i*length + j]);
             }
             fprintf(pfile, "\n");
         }
@@ -93,7 +99,7 @@ int main() {
     // -----------------------------------------------------------------
     cudaFree(&d_length); cudaFree(d_spins);
     cudaFree(states);
-    delete[] p_spins;
+    delete[] spins;
 
     return 0;
 }
