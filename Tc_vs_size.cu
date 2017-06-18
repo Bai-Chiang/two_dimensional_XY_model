@@ -13,29 +13,6 @@
 #include "src/xy_model.h"
 #include "src/cuda_reduction.h"
 
-void print (float* arr, int length) {
-    for (long long i = 0; i < length; ++i) {
-        printf("%f ", arr[i]);
-    }
-    std::cout << std::endl;
-}
-void print (double* arr, int length) {
-    for (long long i = 0; i < length; ++i) {
-        printf("%lf ", arr[i]);
-    }
-    std::cout << std::endl;
-}
-
-
-void print_arr (double* arr, int dim1, int dim2) {
-    for (int i = 0; i < dim1; ++i){
-        for (int j = 0; j < dim2; ++j) {
-            printf("%.3f ", arr[i * dim2 + j]);
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-}
 
 int main() {
     // some values can be adjusted
@@ -69,17 +46,11 @@ int main() {
     int* d_length; // length
     long long* d_n_itter; // n_itter
     float* d_T; // T
-    //float* d_Sx; // x component of spin
-    //float* d_Sy; // y component of spin
     float* d_E; // energy for each spin: E_i = -cos(theta_i - theta_j) for adjacent j
     // used to sotre output array
-    //float* d_oSx;
-    //float* d_oSy;
     float* d_oE;
     // when reducing 2D-spin need these variable
     long long reduced_length;
-    //float Sx[1024];
-    //float Sy[1024];
     float E[1024];
     long long index;
     long long index_next, index_prev;
@@ -89,7 +60,6 @@ int main() {
     double* E_mean = new double[n_T];
     double* E_per_spin_vs_T = new double[n_T];
     double f_sample;
-    //double T_double;
     double* Tc_vs_size = new double[n_length];
     double Tc;
     double Cv_max;
@@ -138,15 +108,10 @@ int main() {
 
             for (int i_T = n_T-1; i_T >= 0; --i_T ) { // temperature goes down
 
-                //T = T_min + float(i_T+1) * (T_max - T_min)/float(n_T);
                 T = T_min + float(i_T+1) * (T_max - T_min)/float(n_T);
                 cudaMemcpy(d_T, &T, sizeof(float), cudaMemcpyHostToDevice);
 
-                //std::cout << "i sample: " << i_sample << "    T: " << T << std::endl;
-
                 // warm up
-                //warm_up <<<blocks, threads_per_block>>> (d_spins, d_T, d_length, d_n_itter, states);
-
                 for (long long i = 0; i < n_itter; ++i) {
                     // only needs half of length, so at this time # of threads in a block is half of previous
                     warm_up_type_1<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states);
@@ -169,11 +134,7 @@ int main() {
                     cudaFree(d_oE);
                 }
                 cudaMemcpy(E, d_E, reduced_length * sizeof(float), cudaMemcpyDeviceToHost);
-                //if (i_length == 4 ) std::cout << "E[1023]: "<< E[1023] << std::endl;
                 cudaFree(d_E);
-                //if (i_length == 4){
-                //std::cout << "reduced length: " <<reduced_length<< std::endl;}
-                //print(E, reduced_length);}
 
                 index = i_T * n_sample + i_sample;
                 E_sample[index] = 0.0;
@@ -189,17 +150,10 @@ int main() {
                      */
                     if (!isnan(E[i])){
                         E_sample[index] += E[i];
-                    }// else {
-                    //    std::cout << "an nan value appears! Abort it!" << std::endl;
-                    //}
-                    //if (i_length == 4)std::cout<< "i: " << i  << "    E [i]: " << E[i] << std::endl;
+                    }
                 }
-                //if (i_length == 4)std::cout << "E sample [index]: " << E_sample[index] << std::endl;
             }
         }
-
-        //if (i_length == 4)
-        //    print_arr(E_sample, n_T, n_sample );
 
         cudaFree(d_spins);
         cudaFree(d_length);
@@ -215,7 +169,6 @@ int main() {
         for (int i_sample = 0; i_sample < n_sample; ++i_sample) {
            for (int i_T = 0; i_T < n_T; ++i_T) {
                index = i_T * n_sample + i_sample;
-               //std::cout << "index: " << index << std::endl;
                if (i_T == 0) {
                    index_next = (i_T + 1) * n_sample + i_sample;
                    specific_heat_per_spin_sample[index] = (E_sample[index_next] -  E_sample[index])/( double(T_max - T_min)/double(n_T) );
@@ -230,49 +183,28 @@ int main() {
            }
         }
 
-        //std::cout << "specific_heat_per_spin_sample: "<< std::endl;
-        //print_arr(specific_heat_per_spin_sample, n_T, n_sample);
-
-
         for (int i_T = 0; i_T < n_T; ++i_T) {
             E_mean[i_T] = 0.0;
             specific_heat_per_spin_vs_T[i_length * n_T + i_T] = 0.0;
             for (long long i_sample = 0; i_sample < n_sample; ++i_sample) {
                 index = i_T * n_sample + i_sample;
-                //E_mean[i_T] += E_sample[index]/f_sample;
-                //    std::cout << "specific_heat_per_spin_vs_T index: " << i_length * n_T + i_T << std::endl;
-                //std::cout << "i length: " << i_length << "   specific_heat_per_spin_sample[index]: " << specific_heat_per_spin_sample[index]/f_sample << std::endl;
                 specific_heat_per_spin_vs_T[i_length * n_T + i_T] += specific_heat_per_spin_sample[index]/f_sample;
-                //specific_heat_per_spin_vs_T[i_length * n_T + i_T] = 110;
-                //std::cout << "i" << i_length * n_T + i_T <<  "    specific_heat_per_spin_vs_T: " <<specific_heat_per_spin_vs_T[i_length * n_T + i_T] << std::endl;
             }
             specific_heat_per_spin_vs_T[i_length * n_T + i_T] = specific_heat_per_spin_vs_T[i_length * n_T + i_T]/double(size);
-            //std::cout << "specific_heat_per_spin_vs_T: " << std::endl;
-            //print_arr(specific_heat_per_spin_vs_T, n_length, n_T);
         }
 
-        //std::cout << "specific_heat_per_spin_vs_T: " << std::endl;
-        //print_arr(specific_heat_per_spin_vs_T, n_length, n_T);
 
         // find Tc. Tc is when Cv get maximum value
         Tc = 0; Cv_max = 0;
-        //if (i_length == 4) print_arr(specific_heat_per_spin_vs_T, n_length, n_T);
         for (int i_T = 0; i_T < n_T; ++i_T){
             index = i_length * n_T + i_T;
             if (specific_heat_per_spin_vs_T[index] > Cv_max) {
                 Cv_max = specific_heat_per_spin_vs_T[index];
                 Tc = double(T_min) + double( i_T + 1) * (T_max - T_min)/double(n_T);
-                //Tc = T_min + float(i_T+1) * (T_max - T_min)/float(n_T);
-                //std::cout << "Cv max: " << Cv_max <<"    Tc: "<<Tc << std::endl;
             }
         }
         Tc_vs_size[i_length] = Tc;
     }
-
-    //std::cout << "specific_heat_per_spin_vs_T: " << std::endl;
-    //print_arr(specific_heat_per_spin_vs_T, n_length, n_T);
-    std::cout<< "Tc: " << std::endl;
-    print(Tc_vs_size, n_length);
 
     // --------------------------------------------------------------------------------------------
     // write file
@@ -317,9 +249,10 @@ int main() {
     fclose(pfile);
 
     // -----------------------------------------------------------------
-    //cudaFree(&d_length); cudaFree(d_spins);
-    //cudaFree(states);
-    //delete[] p_spins;
+    delete[] specific_heat_per_spin_vs_T;
+    delete[] E_mean;
+    delete[] E_per_spin_vs_T;
+    delete[] Tc_vs_size;
 
     return 0;
 }

@@ -14,29 +14,6 @@
 #include "src/xy_model.h"
 #include "src/cuda_reduction.h"
 
-void print (float* arr, int length) {
-    for (long long i = 0; i < length; ++i) {
-        printf("%f ", arr[i]);
-    }
-    printf("\n");
-}
-void print (double* arr, int length) {
-    for (long long i = 0; i < length; ++i) {
-        printf("%lf ", arr[i]);
-    }
-    printf("\n");
-}
-
-
-void print_arr (float* arr, int dim1, int dim2) {
-    for (int i = 0; i < dim1; ++i){
-        for (int j = 0; j < dim2; ++j) {
-            printf("%.3f ", arr[i * dim2 + j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
 
 int main() {
 
@@ -50,7 +27,6 @@ int main() {
 
     // ============================================================================================
     // some variables used in later calculation
-
     // ------------------------------------------
     // host part
     unsigned int seed = time(NULL); // seed of random numbers
@@ -59,7 +35,6 @@ int main() {
     int blocks = size/threads_per_block;
     long long n_itter = warm_up_steps/size; // sice total number of threads is size (threads_per_block * blocks), to obtain warm_up_steps, need to itterate warm_up_steps/size times
     float T;
-    //float* p_spins = new float[size];
     double* Mx_sample = new double[n_sample*n_T]; //used to record result of each sample at each T
     double* My_sample = new double[n_sample*n_T];
     double* M_squared_sample = new double[n_sample*n_T];
@@ -74,8 +49,6 @@ int main() {
     float E[1024];
     long long index;
     long long index_next, index_prev;
-//float* debug_spin = new float[size];
-//float* debug_Sx = new float[size];
 
     // ------------------------------------------
     // device part
@@ -92,9 +65,6 @@ int main() {
     float* d_Sx; // x component of spin
     float* d_Sy; // y component of spin
     float* d_E; // energy for each spin: E_i = -cos(theta_i - theta_j) for adjacent j
-    //float* d_Mx_n_sample, d_My_n_sample; // used to record result of each sample
-    //float* d_M_n_sample_squared, d_M_n_sample; // |M|^2 and |M|
-    //float* d_E_n_sample_squared, d_E_n_sample; // E^2 and E
     // used to sotre output array
     float* d_oSx;
     float* d_oSy;
@@ -120,26 +90,22 @@ int main() {
         // To get to stable state, first warm up needs more steps
         for (long long i = 0; i < n_itter*5; ++i) {
             // only needs half of length, so at this time # of threads in a block is half of previous
-            warm_up_type_1<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states); 
+            warm_up_type_1<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states);
             warm_up_type_2<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states);
         }
-        
+
         for (int i_T = n_T-1; i_T >= 0; --i_T ) { // temperature goes down
 
             T = T_min + float(i_T+1) * (T_max - T_min)/float(n_T);
             cudaMemcpy(d_T, &T, sizeof(float), cudaMemcpyHostToDevice);
 
-            //std::cout << "i sample: " << i_sample << "    T: " << T << std::endl;
-
             // warm up
-            //warm_up <<<blocks, threads_per_block>>> (d_spins, d_T, d_length, d_n_itter, states);
-            
             for (long long i = 0; i < n_itter; ++i) {
                 // only needs half of length, so at this time # of threads in a block is half of previous
-                warm_up_type_1<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states); 
+                warm_up_type_1<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states);
                 warm_up_type_2<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states);
             }
-            
+
 
             // get spin
             cudaMalloc((void**)&d_Sx, size*sizeof(float));
@@ -188,8 +154,6 @@ int main() {
                 Mx_sample[index] += Sx[i]/double(size);
                 My_sample[index] += Sy[i]/double(size);
                 E_sample[index] += E[i];
-                //M_squared_sample[index] += Mx_sample[index] * Mx_sample[index] + My_sample[index] * My_sample[index];
-                //E_squared_sample[index] += E[i] * E[i];
             }
         }
     }
@@ -198,10 +162,6 @@ int main() {
     cudaFree(d_length);
     cudaFree(d_n_itter);
     cudaFree(d_T);
-    //cudaFree(d_Sx);
-    //cudaFree(d_Sy);
-    //cudaFree(d_E);
-
 
     // ============================================================================================
     // analysis result
@@ -214,7 +174,6 @@ int main() {
     double* M_mean_square = new double[n_T];
     double* M_mean = new double[n_T];
     double* E_mean = new double[n_T];
-    //double* E_mean_square = new double[n_T];
 
     double f_sample = double(n_sample);
     double T_double;
@@ -223,7 +182,6 @@ int main() {
     for (int i_sample = 0; i_sample < n_sample; ++i_sample) {
        for (int i_T = 0; i_T < n_T; ++i_T) {
            index = i_T * n_sample + i_sample;
-           //std::cout << "index: " << index << std::endl;
            if (i_T == 0) {
                index_next = (i_T + 1) * n_sample + i_sample;
                specific_heat_per_spin_sample[index] = (E_sample[index_next] -  E_sample[index])/( double(T_max - T_min)/double(n_T) );
@@ -243,7 +201,6 @@ int main() {
         M_mean[i_T] = 0.0;
         M_mean_square[i_T] = 0.0;
         E_mean[i_T] = 0.0;
-        //E_mean_square[i_T] = 0.0;
         Mx_vs_T[i_T] = 0.0;
         My_vs_T[i_T] = 0.0;
         susceptibility_vs_T[i_T] = 0.0;
@@ -255,7 +212,6 @@ int main() {
             M_mean_square[i_T] += (Mx_sample[index] * Mx_sample[index] + My_sample[index] * My_sample[index])/f_sample;
             E_mean[i_T] += E_sample[index]/f_sample;
             specific_heat_per_spin_vs_T[i_T] += specific_heat_per_spin_sample[index]/f_sample;
-            //E_mean_square[i_T] += E_sample[index] * E_sample[index]/f_sample;
             Mx_vs_T[i_T] += Mx_sample[index]/f_sample;
             My_vs_T[i_T] += My_sample[index]/f_sample;
         }
@@ -263,28 +219,7 @@ int main() {
         susceptibility_vs_T[i_T] = (M_mean_square[i_T] - M_mean[i_T]*M_mean[i_T])/T_double;
         E_per_spin_vs_T[i_T] = E_mean[i_T]/double(size);
         specific_heat_per_spin_vs_T[i_T] = specific_heat_per_spin_vs_T[i_T]/double(size);
-        //print(specific_heat_per_spin_vs_T, n_T);
     }
-    
-    /*
-    std::cout<< "Mx:\n";
-    print(Mx_vs_T, n_T);
-    std::cout << std::endl;
-    std::cout << "My:\n";
-    print(My_vs_T, n_T);
-    std::cout<< std::endl;
-    std::cout << "E:\n";
-    print(E_mean, n_T);
-    std::cout<< std::endl;
-    std::cout << "Chi:\n";
-    print(susceptibility_vs_T,n_T);
-    std::cout << std::endl;
-    */
-    //std::cout << "Cv:\n";
-    //print(specific_heat_per_spin_vs_T, n_T);
-    //print(specific_heat_per_spin_sample, n_T);
-
-
 
     // --------------------------------------------------------------------------------------------
     // write file
@@ -333,9 +268,21 @@ int main() {
     fclose(pfile);
 
     // -----------------------------------------------------------------
-    //cudaFree(&d_length); cudaFree(d_spins);
-    //cudaFree(states);
-    //delete[] p_spins;
+    delete[] Mx_sample;
+    delete[] My_sample;
+    delete[] M_squared_sample;
+    delete[] E_sample;
+    delete[] E_squared_sample;
+    delete[] specific_heat_per_spin_sample;
+
+    delete[] Mx_vs_T;
+    delete[] susceptibility_vs_T;
+    delete[] specific_heat_per_spin_vs_T;
+    delete[] E_per_spin_vs_T;
+
+    delete[] M_mean_square;
+    delete[] M_mean;
+    delete[] E_mean;
 
     return 0;
 }

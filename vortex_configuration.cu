@@ -22,7 +22,7 @@ int main() {
     // some values can be adjusted
     int length = 128; // 2^n, n >= 5    length of 2D-spins, the 2D-spins lattice will be length * length
     long long warm_up_steps = (long long)(length * length) * 32768; // length * length * 2^n    warm up step is proportional to total number of spins
-    float T = 0.01; // temperature, suppose boltzmann constant k = 1 
+    float T = 0.01; // temperature, suppose boltzmann constant k = 1
 
 
     // ============================================================================================
@@ -32,8 +32,6 @@ int main() {
     int threads_per_block = std::min(1024, length);
     int blocks = size/threads_per_block;
     long long n_itter = warm_up_steps/size; // sice total number of threads is size (threads_per_block * blocks), to obtain warm_up_steps, need to itterate warm_up_steps/size times
-    //std::cout << "threads: " << threads_per_block << "     blocks: " << blocks << std::endl;
-    //std::cout << "5%2: " << 5%2 << std::endl; 
     // --------------------------------------------------------------------------------------------
     curandState_t* states; // used to store random state for each core
     cudaMalloc((void**) &states, size * sizeof(curandState_t)); // allocate memory in device
@@ -61,10 +59,9 @@ int main() {
         initialize <<<blocks, threads_per_block>>> (d_spins, states);
 
         // warm up
-        //warm_up <<<blocks, threads_per_block>>> (d_spins, d_T, d_length, d_n_itter, states);
         for (long long i = 0; i < n_itter; ++i) {
             // only needs half of length, so at this time # of threads in a block is half of previous
-            warm_up_type_1<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states); 
+            warm_up_type_1<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states);
             warm_up_type_2<<<blocks, threads_per_block/2>>> (d_spins, d_T, d_length, states);
         }
 
@@ -80,7 +77,7 @@ int main() {
     std::string str_T = std::to_string(T);
     std::string str_n_warm = std::to_string(warm_up_steps);
     std::string file_name = std::string("result/vortex_configuration/") + str_L + std::string("_") + str_T + "_" + str_n_warm + std::string(".data");
-    
+
     FILE* pfile;
     pfile = fopen(file_name.c_str(), "w");
     if (pfile != NULL) {
@@ -103,5 +100,3 @@ int main() {
 
     return 0;
 }
-
-
