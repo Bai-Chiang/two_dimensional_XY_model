@@ -1,6 +1,5 @@
 # 2D XY model with CUDA programming
 
-2D-XY model simulation with CUDA
 Program tested on Ubuntu 16.04 + CUDA 8.0
 
 # Run code
